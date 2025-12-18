@@ -1,10 +1,6 @@
-""" 
-Making an EC data snippet for Patrick
-
-"""
-
 import pandas as pd
 import glob
+from pathlib import Path
 
 # Keep and rename these columns
 columns_to_keep = [
@@ -31,6 +27,9 @@ rename_dict = {
 datapath = "H:\_SILVEX II 2025\Data\EC data\Silvia 2 (oben)\converted\\"
 outputpath = "H:\_SILVEX II 2025\Data\EC data\Silvia 2 (oben)\PEDDY\input\\"
 
+outdir = Path(outputpath)
+outdir.mkdir(parents=True, exist_ok=True)
+
 files = glob.glob(datapath + "SILVEXII_Silvia2_sonics_*_3m.csv")
 
 for file in files:
@@ -47,6 +46,6 @@ for file in files:
     df_selected = df[columns_to_keep].rename(columns=rename_dict)
 
     # Export to CSV
-    output_file = outputpath + filename
-    #df_selected.to_csv(output_file, index=False)
+    out_path = (outdir / filename).with_suffix('.dat')
+    df_selected.to_csv(out_path, index=False, na_rep="NaN")
     
