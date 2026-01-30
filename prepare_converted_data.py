@@ -28,40 +28,43 @@ SPLIT_SPECS: List[SplitSpec] = [
         suffix="_1m",
         column_map={
             "TIMESTAMP": "TIMESTAMP",
-            "Ux_CSAT3": "Ux",
-            "Uy_CSAT3": "Uy",
-            "Uz_CSAT3": "Uz",
-            "Ts_CSAT3": "Ts",
-            "Diag_CSAT3": "diag_sonic",
+            "Ux_irga": "Ux",
+            "Uy_irga": "Uy",
+            "Uz_irga": "Uz",
+            "Ts_irga": "Ts",
+            "diag_sonic_irga": "diag_sonic",
+            "CO2_irga": "CO2",
+            "H2O_irga": "H2O",
+            "diag_gas_irga": "diag_gas",
         },
-        required={"TIMESTAMP", "Ux_CSAT3", "Uy_CSAT3", "Uz_CSAT3"},
+        required={"TIMESTAMP", "Ux_irga", "Uy_irga", "Uz_irga", "Ts_irga", "diag_sonic_irga", "CO2_irga", "H2O_irga", "diag_gas_irga"},
     ),
     SplitSpec(
         label="2m",
         suffix="_2m",
         column_map={
             "TIMESTAMP": "TIMESTAMP",
-            "Ux_lower_CSAT3B": "Ux",
-            "Uy_lower_CSAT3B": "Uy",
-            "Uz_lower_CSAT3B": "Uz",
-            "Ts_lower_CSAT3B": "Ts",
-            "Diag_lower_CSAT3B": "diag_sonic",
+            "Ux_CSAT": "Ux",
+            "Uy_CSAT": "Uy",
+            "Uz_CSAT": "Uz",
+            "Ts_CSAT": "Ts",
+            "Diag_CSAT": "diag_sonic",
         },
-        required={"TIMESTAMP", "Ux_lower_CSAT3B", "Uy_lower_CSAT3B", "Uz_lower_CSAT3B"},
-    ),
-    SplitSpec(
-        label="3m",
-        suffix="_3m",
-        column_map={
-            "TIMESTAMP": "TIMESTAMP",
-            "Ux_upper_CSAT3B": "Ux",
-            "Uy_upper_CSAT3B": "Uy",
-            "Uz_upper_CSAT3B": "Uz",
-            "Ts_upper_CSAT3B": "Ts",
-            "Diag_upper_CSAT3B": "diag_sonic",
-        },
-        required={"TIMESTAMP", "Ux_upper_CSAT3B", "Uy_upper_CSAT3B", "Uz_upper_CSAT3B"},
-    ),
+        required={"TIMESTAMP", "Ux_CSAT", "Uy_CSAT", "Uz_CSAT", "Ts_CSAT", "Diag_CSAT"},
+    )
+    #SplitSpec(
+    #    label="3m",
+    #    suffix="_3m",
+    #    column_map={
+    #        "TIMESTAMP": "TIMESTAMP",
+    #        "Ux_upper_CSAT3B": "Ux",
+    #        "Uy_upper_CSAT3B": "Uy",
+    #        "Uz_upper_CSAT3B": "Uz",
+    #        "Ts_upper_CSAT3B": "Ts",
+    #        "Diag_upper_CSAT3B": "diag_sonic",
+    #    },
+    #    required={"TIMESTAMP", "Ux_upper_CSAT3B", "Uy_upper_CSAT3B", "Uz_upper_CSAT3B"},
+    #),
 ]
 
 
@@ -69,23 +72,22 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Split multi-level EC files into sensor-specific .dat files.")
     parser.add_argument(
         "--input-dir",
-        default="D:\\SILVEX II 2025\\EC data\\Silvia 1 (unten)\\converted\\",
+        default="F:\\Data\\SILVEX-I\\EC Data\\Silvia3_Mitte\\converted\\",
         help="Directory containing the converted .dat files.",
     )
     parser.add_argument(
         "--output-dir",
-        default="D:\\SILVEX II 2025\\EC data\\Silvia 1 (unten)\\PEDDY\\input\\",
+        default="F:\\Data\\SILVEX-I\\EC Data\\Silvia3_Mitte\\PEDDY\\input\\",
         help="Directory to write the split .dat files to.",
     )
     parser.add_argument(
         "--pattern",
-        default="SILVEXII_Silvia1_sonics_*.dat",
+        default="SILVEXI_Silvia3_sonics_*.dat",
         help="Glob pattern used to discover source files inside --input-dir.",
     )
     parser.add_argument("--delimiter", default=",", help="Field delimiter used in the source files (default: ,).")
     parser.add_argument("--encoding", default="utf-8", help="File encoding used for reading (default: utf-8).")
     return parser.parse_args()
-
 
 def available_columns(columns: Iterable[str], df_columns: Iterable[str]) -> List[str]:
     df_cols = set(df_columns)
