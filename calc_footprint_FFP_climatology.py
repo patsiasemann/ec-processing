@@ -90,6 +90,15 @@ def FFP_climatology(zm=None, z0=None, umean=None, h=None, ol=None, sigmav=None, 
     #===========================================================================
     # Get kwargs
     show_heatmap = kwargs.get('show_heatmap', True)
+    heatmap_min_threshold = kwargs.get('heatmap_min_threshold', None)
+    map_overlay = kwargs.get('map_overlay', False)
+    map_origin = kwargs.get('map_origin', None)
+    map_origin_crs = kwargs.get('map_origin_crs', None)
+    map_basemap_provider = kwargs.get('map_basemap_provider', None)
+    map_basemap_alpha = kwargs.get('map_basemap_alpha', 0.9)
+    map_origin_label = kwargs.get('map_origin_label', 'Origin')
+    contour_line_width = kwargs.get('contour_line_width', None)
+    contour_line_color = kwargs.get('contour_line_color', None)
 
 
     #===========================================================================
@@ -262,13 +271,13 @@ def FFP_climatology(zm=None, z0=None, umean=None, h=None, ol=None, sigmav=None, 
     valids = [True if not any([val is None for val in vals]) else False \
               for vals in zip(ustars, sigmavs, hs, ols, wind_dirs, zms)]
 
-    if verbosity > 1: print ('')
+    if verbosity > 1: print('')
     for ix, (ustar, sigmav, h, ol, wind_dir, zm, z0, umean) \
             in enumerate(zip(ustars, sigmavs, hs, ols, wind_dirs, zms, z0s, umeans)):
 
         # Counter
         if verbosity > 1 and ix % pulse == 0:
-            print ('Calculating footprint ', ix+1, ' of ', ts_len)
+            print('Calculating footprint ', ix+1, ' of ', ts_len)
 
         valids[ix] = check_ffp_inputs(ustar, sigmav, h, ol, wind_dir, zm, z0, umean, rslayer, verbosity)
 
@@ -345,7 +354,7 @@ def FFP_climatology(zm=None, z0=None, umean=None, h=None, ol=None, sigmav=None, 
     vs = None
     clevs = None
     if n==0:
-        print ("No footprint calculated")
+        print("No footprint calculated")
         flag_err = 1
     else:
 
@@ -420,8 +429,22 @@ def FFP_climatology(zm=None, z0=None, umean=None, h=None, ol=None, sigmav=None, 
         #===========================================================================
         # Plot footprint
         if fig:
-            fig_out,ax = plot_footprint(x_2d=x_2d, y_2d=y_2d, fs=fclim_2d,
-                                        show_heatmap=show_heatmap,clevs=frs)
+            fig_out,ax = plot_footprint(
+                x_2d=x_2d,
+                y_2d=y_2d,
+                fs=fclim_2d,
+                show_heatmap=show_heatmap,
+                clevs=frs,
+                heatmap_min_threshold=heatmap_min_threshold,
+                contour_line_width=contour_line_width,
+                contour_line_color=contour_line_color,
+                map_overlay=map_overlay,
+                map_origin=map_origin,
+                map_origin_crs=map_origin_crs,
+                map_origin_label=map_origin_label,
+                map_basemap_provider=map_basemap_provider,
+                map_basemap_alpha=map_basemap_alpha,
+            )
 
             
     #===========================================================================
@@ -520,8 +543,26 @@ def get_contour_vertices(x, y, f, lev):
     return [xr, yr]   # x,y coords of contour points.	
 
 #===============================================================================
-def plot_footprint(x_2d, y_2d, fs, clevs=None, show_heatmap=True, normalize=None, 
-                   colormap=None, line_width=0.5, iso_labels=None):
+def plot_footprint(
+    x_2d,
+    y_2d,
+    fs,
+    clevs=None,
+    show_heatmap=True,
+    normalize=None,
+    colormap=None,
+    line_width=0.5,
+    iso_labels=None,
+    heatmap_min_threshold=None,
+    contour_line_width=None,
+    contour_line_color=None,
+    map_overlay=False,
+    map_origin=None,
+    map_origin_crs=None,
+    map_origin_label='Origin',
+    map_basemap_provider=None,
+    map_basemap_alpha=0.9,
+):
     '''Plot footprint function and contours if request'''
 
     import numpy as np
@@ -529,19 +570,54 @@ def plot_footprint(x_2d, y_2d, fs, clevs=None, show_heatmap=True, normalize=None
     import matplotlib.cm as cm
     from matplotlib.colors import LogNorm
 
+    use_map = map_overlay and map_origin is not None and map_origin_crs is not None
+    if map_overlay and not use_map:
+        raise ValueError("map_overlay=True requires map_origin and map_origin_crs")
+    if use_map:
+        try:
+            from pyproj import Transformer
+            import contextily as cx
+        except ImportError:
+            raise ImportError("map_overlay=True requires pyproj and contextily to be installed")
+
+        origin_crs_norm = str(map_origin_crs).upper()
+        if origin_crs_norm in ["WGS84", "EPSG:4326"]:
+            origin_crs = "EPSG:4326"
+        elif origin_crs_norm in ["LV95", "EPSG:2056"]:
+            origin_crs = "EPSG:2056"
+        else:
+            raise ValueError("map_origin_crs must be 'WGS84', 'LV95', 'EPSG:4326', or 'EPSG:2056'")
+
+        origin_x, origin_y = map_origin
+        abs_x = origin_x + x_2d
+        abs_y = origin_y + y_2d
+        transformer = Transformer.from_crs(origin_crs, "EPSG:3857", always_xy=True)
+        x_plot, y_plot = transformer.transform(abs_x, abs_y)
+        origin_plot_x, origin_plot_y = transformer.transform(origin_x, origin_y)
+    else:
+        x_plot, y_plot = x_2d, y_2d
+        origin_plot_x = origin_plot_y = None
+
     #If input is a list of footprints, don't show footprint but only contours,
     #with different colors
     if isinstance(fs, list):
         show_heatmap = False
+        fs_list = fs
     else:
-        fs = [fs]
+        fs_list = [fs]
+
+    # Apply optional heatmap masking (contours still use original values)
+    if heatmap_min_threshold is not None:
+        fs_heatmap = [np.where(f >= heatmap_min_threshold, f, np.nan) for f in fs_list]
+    else:
+        fs_heatmap = fs_list
 
     if colormap is None: colormap = cm.jet
     #Define colors for each contour set
-    cs = [colormap(ix) for ix in np.linspace(0, 1, len(fs))]
+    cs = [colormap(ix) for ix in np.linspace(0, 1, len(fs_list))]
 
     # Initialize figure
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(8, 8))
     # fig.patch.set_facecolor('none')
     # ax.patch.set_facecolor('none')
 
@@ -556,12 +632,14 @@ def plot_footprint(x_2d, y_2d, fs, clevs=None, show_heatmap=True, normalize=None
         #Plot contour levels of all passed footprints
         #Plot isopleth
         levs = [clev for clev in clevs]
-        for f, c in zip(fs, cs):
-            cc = [c]*len(levs)
+        lw = contour_line_width if contour_line_width is not None else line_width
+        base_color_heat = contour_line_color if contour_line_color is not None else 'w'
+        for f, c in zip(fs_list, cs):
+            cc = [contour_line_color] * len(levs) if contour_line_color is not None else [c]*len(levs)
             if show_heatmap:
-                cp = ax.contour(x_2d, y_2d, f, levs, colors = 'w', linewidths=line_width)
+                cp = ax.contour(x_plot, y_plot, f, levs, colors=base_color_heat, linewidths=lw)
             else:
-                cp = ax.contour(x_2d, y_2d, f, levs, colors = cc, linewidths=line_width)
+                cp = ax.contour(x_plot, y_plot, f, levs, colors=cc, linewidths=lw)
             #Isopleth Labels
             if iso_labels is not None:
                 pers = [str(int(clev[0]*100))+'%' for clev in clevs]
@@ -577,19 +655,30 @@ def plot_footprint(x_2d, y_2d, fs, clevs=None, show_heatmap=True, normalize=None
         else:
             norm = None
 
-        xmin = np.nanmin(x_2d)
-        xmax = np.nanmax(x_2d)
-        ymin = np.nanmin(y_2d)
-        ymax = np.nanmax(y_2d)
-        for f in fs:
-            im = ax.imshow(f[:, :], cmap=colormap, extent=(xmin, xmax, ymin, ymax),
-                 norm=norm, origin='lower', aspect=1)
-        plt.xlabel('x [m]')
-        plt.ylabel('y [m]')
+        xmin = np.nanmin(x_plot)
+        xmax = np.nanmax(x_plot)
+        ymin = np.nanmin(y_plot)
+        ymax = np.nanmax(y_plot)
+        for f in fs_heatmap:
+            if use_map:
+                im = ax.pcolormesh(x_plot, y_plot, f, cmap=colormap, norm=norm, shading='auto')
+            else:
+                im = ax.imshow(f[:, :], cmap=colormap, extent=(xmin, xmax, ymin, ymax),
+                     norm=norm, origin='lower', aspect=1)
 
         #Colorbar
         cbar = fig.colorbar(im, shrink=1.0, format='%.3e')
         #cbar.set_label('Flux contribution', color = 'k')
+
+    if use_map:
+        provider = map_basemap_provider if map_basemap_provider is not None else cx.providers.SwissFederalGeoportal.SWISSIMAGE
+        cx.add_basemap(ax, source=provider, crs='EPSG:3857', alpha=map_basemap_alpha)
+        if origin_plot_x is not None and origin_plot_y is not None:
+            ax.scatter(origin_plot_x, origin_plot_y, s=40, c='black', edgecolors='white', zorder=6, label=map_origin_label)
+            ax.legend()
+
+    plt.xlabel('x [m]')
+    plt.ylabel('y [m]')
     plt.show()
 
     return fig, ax
@@ -671,7 +760,7 @@ def raise_ffp_exception(code, verbosity):
     ex = [it for it in exceptions if it['code'] == code][0]
     string = ex['type'] + '(' + str(ex['code']).zfill(4) + '):\n '+ ex['msg']
 
-    if verbosity > 0: print('')
+    #if verbosity > 0: print('')
 
     if ex['type'] == exTypes['fatal']:
         if verbosity > 0:
@@ -681,9 +770,9 @@ def raise_ffp_exception(code, verbosity):
         raise Exception(string)
     elif ex['type'] == exTypes['alert']:
         string = string + '\n Execution continues.'
-        if verbosity > 1: print (string)
+        if verbosity > 1: print(string)
     elif ex['type'] == exTypes['error']:
         string = string + '\n Execution continues.'
-        if verbosity > 1: print (string)
+        if verbosity > 1: print(string)
     else:
-        if verbosity > 1: print (string)
+        if verbosity > 1: print(string)
