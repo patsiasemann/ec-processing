@@ -20,15 +20,15 @@ using Glob
 # Data setup
 
 # SLF PC
-input_path = raw"H:\_SILVEX II 2025\Data\EC data\Silvia 2 (oben)\PEDDY\output\1m\\"
-output_path = raw"H:\_SILVEX II 2025\Data\EC data\Silvia 2 (oben)\PEDDY\output\mrd\\"
+input_path = raw"D:\SILVEX II 2025\EC data\Silvia 2 (oben)\PEDDY\output_OLD (with double rotation)\3m\\"
+output_path = raw"D:\SILVEX II 2025\EC data\Silvia 2 (oben)\PEDDY\output_OLD (with double rotation)\mrd\\"
 
 # MacBook (HDD)
 #input_path = raw"/Volumes/Expansion/Data/SILVEX II/Silvia 2 (oben)/PEDDY/output"
 #output_path = raw"/Volumes/Expansion/Data/SILVEX II/Silvia 2 (oben)/PEDDY/output/mrd"
 
 # Output base filename
-output_base = "SILVEXII_Silvia2_1m"
+output_base = "SILVEXII_Silvia2_3m_03-09_lasttry"
 plot_only = false
 mrd_stats_path_override = nothing
 
@@ -65,7 +65,7 @@ function read_processed_dimarray(path::AbstractString, opts::PEDDY.FileOptions; 
     DimArray(data, (PEDDY.Ti(timestamps), PEDDY.Var(vars)))
 end
 
-processed_files = Glob.glob("2025-06-*_SILVEXII_Silvia2_1m.dat", input_path)
+processed_files = Glob.glob("2025-06-25_*_SILVEXII_Silvia2_3m.dat", input_path)
 
 if isempty(processed_files)
     error("No processed sonic files found in $(input_path). Patterns tried: $processed_files and fallback.")
@@ -161,7 +161,7 @@ if plot_only
     @info "Plot-only mode: reading MRD stats" mrd_dat_path
     summary_stats = read_mrd_summary(mrd_dat_path)
 else
-    mrd = PEDDY.OrthogonalMRD(M=16, normalize=true)
+    mrd = PEDDY.OrthogonalMRD(M=15, normalize=true)
     PEDDY.decompose!(mrd, processed_sonic, nothing)
     res = PEDDY.get_mrd_results(mrd)
     if res === nothing
