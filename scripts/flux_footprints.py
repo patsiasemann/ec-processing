@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import importlib, calc_footprint_FFP_climatology as footprint
+import importlib, src.calc_footprint_FFP_climatology as footprint
 importlib.reload(footprint)
 
 from src.flux_footprints import (

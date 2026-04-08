@@ -116,8 +116,32 @@ def compute_z0(wind_speed: pd.Series, ustar: pd.Series, z: float) -> pd.Series:
 	return out
 
 
+def read_eddypro_csv(csv_path: Path) -> pd.DataFrame:
+	"""Read EddyPro full_output CSV from either single-header or multi-header exports."""
+	common_kwargs = {"sep": ",", "na_values": ["NaN", "NAN"], "low_memory": False}
+
+	# First try the straightforward single-header format.
+	df_raw = pd.read_csv(csv_path, **common_kwargs)
+	df_raw.columns = [str(c).strip() for c in df_raw.columns]
+	if {"date", "time"}.issubset(df_raw.columns):
+		return df_raw
+
+	# Fallback for EddyPro exports with:
+	# row 1 = section labels, row 2 = actual headers, row 3 = units.
+	df_raw = pd.read_csv(csv_path, header=1, skiprows=[2], **common_kwargs)
+	df_raw.columns = [str(c).strip() for c in df_raw.columns]
+	if {"date", "time"}.issubset(df_raw.columns):
+		return df_raw
+
+	available = ", ".join(df_raw.columns[:15])
+	raise ValueError(
+		f"Could not locate required 'date'/'time' columns in {csv_path}. "
+		f"Columns start with: {available}"
+	)
+
+
 def load_eddypro_height(csv_path: Path, height: HeightConfig) -> pd.DataFrame:
-	df_raw = pd.read_csv(csv_path, sep=",", na_values=["NaN"])
+	df_raw = read_eddypro_csv(csv_path)
 	date_time = to_output_date(df_raw["date"], df_raw["time"])
 
 	data = date_time.copy()
@@ -191,8 +215,14 @@ def process_site(site: SiteConfig, output_dir: Path) -> None:
 	if combined.empty:
 		return
 
-	combined = combined.sort_values(["date", "time"])
-	combined = combined[column_order(site.heights)]
+	# Sort by actual timestamp, not by formatted strings like DD.MM.YYYY.
+	sort_dt = pd.to_datetime(
+		combined["date"].astype(str) + " " + combined["time"].astype(str),
+		format="%d.%m.%Y %H:%M",
+		errors="coerce",
+	)
+	combined = combined.assign(_sort_dt=sort_dt).sort_values("_sort_dt").drop(columns=["_sort_dt"])
+	combined = combined.reindex(columns=column_order(site.heights))
 
 	output_dir.mkdir(parents=True, exist_ok=True)
 	out_path = output_dir / f"{site.name}_roughness_ffp_data.CSV"
@@ -209,39 +239,28 @@ def main() -> None:
 			kind="eddypro",
 			base_dir=data_dir / "SILVEX2_Silvia1",
 			heights=[
-				HeightConfig("1m", 1.1),
-				HeightConfig("2m", 2.1),
-				HeightConfig("3m", 3.1),
+				HeightConfig("1m", 1.14),
+				HeightConfig("2m", 2.05),
+				HeightConfig("3m", 3.05),
 			],
 		),
 		SiteConfig(
 			name="SILVEX1_Silvia1",
 			kind="eddypro",
 			base_dir=data_dir / "SILVEX1_Silvia1",
-			heights=[HeightConfig("1m", 1.1), HeightConfig("2m", 2.1)],
+			heights=[HeightConfig("1m", 1.05), HeightConfig("2m", 2.30)],
 		),
 		SiteConfig(
 			name="SILVEX1_Silvia2",
 			kind="eddypro",
 			base_dir=data_dir / "SILVEX1_Silvia2",
-			heights=[HeightConfig("1m", 1.1), HeightConfig("2m", 2.1)],
+			heights=[HeightConfig("1m", 1.10), HeightConfig("2m", 2.40)],
 		),
 		SiteConfig(
 			name="SILVEX1_Silvia3",
 			kind="eddypro",
 			base_dir=data_dir / "SILVEX1_Silvia3",
-			heights=[HeightConfig("1m", 1.1), HeightConfig("2m", 2.1)],
-		),
-		SiteConfig(
-			name="HEFEXIII",
-			kind="hefex_nc",
-			base_dir=data_dir / "HEFEXIII",
-			heights=[
-				HeightConfig("0.5m", 0.5),
-				HeightConfig("3m", 3.0),
-				HeightConfig("5m", 5.0),
-				HeightConfig("9m", 9.0),
-			],
+			heights=[HeightConfig("1m", 1.15), HeightConfig("2m", 2.45)],
 		),
 	]
 
